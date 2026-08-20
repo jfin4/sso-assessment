@@ -1,0 +1,17 @@
+# ignore everything
+*
+
+# allow input/output dirs
+!annotated-data/
+!loes/
+!lookup-tables/
+!raw-data/
+
+# allow files
+!.gitignore
+!LICENSE
+!README.md
+!sso-assessment-lookup.csv
+!sso-assessment-schema.csv
+!sso-assessment.R
+!testing.R
