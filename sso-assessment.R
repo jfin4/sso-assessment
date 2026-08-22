@@ -1,14 +1,13 @@
 # SSO Assessment
 # John.Inman@waterboards.ca.gov
 # 2026-06-01
-# ==============================================================================
 
-# LOAD ========================================================================={{{
+# LOAD {{{======================================================================
 
 .start <- lubridate::now()
 cat("writing")
 
-# load packages ----------------------------------------------------------------{{{
+    # load packages {{{---------------------------------------------------------
 
 suppressPackageStartupMessages({
     library(data.table)
@@ -22,7 +21,7 @@ suppressPackageStartupMessages({
     library(writexl)
 })# }}}
 
-# # read files -------------------------------------------------------------------{{{
+    # # read files {{{----------------------------------------------------------
 
 # trash <- setdiff(ls(all = TRUE), ".start")
 # rm(list = trash)
@@ -68,7 +67,7 @@ suppressPackageStartupMessages({
 # inputs <- grepv("^\\.(?!start)", ls(all = TRUE), perl = TRUE)
 # save(list = inputs, file = "./.RData")# }}}
 
-# load data --------------------------------------------------------------------{{{
+    # load data {{{-------------------------------------------------------------
 
 rm(list = ls())
 
@@ -76,27 +75,27 @@ if (!exists(".data_loaded")) {
     load("./.RData")
 }# }}}
 
-# global variables -------------------------------------------------------------
+    # global variables _________________________________________________________
 
 author <- "jinman"
 region <- "3"
 ir_year <- "2028"
 suffix <- ""# }}}}}}
 
-# FORMAT ======================================================================={{{
+# FORMAT {{{====================================================================
 cat(".") 
 
 # data object is non-lossy
 # annotated data : data -> loe :: comp report : loe -> decision
 
-# create data object -----------------------------------------------------------{{{
+    # create data object {{{----------------------------------------------------
 
 data <- select(.raw_data, all_of(na.omit(.schema$data)))
 
 # TODO: whence come the dupes?
 data <- distinct(data)# }}}
 
-# join lookup tables -----------------------------------------------------------{{{
+    # join lookup tables {{{----------------------------------------------------
 
 ssos <- .ssos |>
     rename(ObjectiveUnit = UnitName) |> 
@@ -130,7 +129,7 @@ data <- data |>
     left_join(sample_types, by = "SampleTypeName") |>
     left_join(pollutants_xwalk, by = "AnalyteName")# }}}
 
-# add remaining columns --------------------------------------------------------{{{
+    # add remaining columns {{{-------------------------------------------------
 
 remaining <- 
     setdiff(.schema$all, names(data)) |>
@@ -139,7 +138,7 @@ remaining <-
 
 data <- cross_join(data, remaining)# }}}
 
-# convert column types ---------------------------------------------------------{{{
+    # convert column types {{{--------------------------------------------------
 
 # numeric
 data <- mutate(data, across(.schema$all[.schema$type %in% "numeric"], as.numeric))
@@ -168,10 +167,10 @@ data <- data |>
 # DATE_CREATED, DATE_UPDATED
 data <- mutate(data, across(c(DATE_CREATED, DATE_UPDATED), as.Date)) # }}}}}}
 
-# SCREEN ======================================================================={{{
+# SCREEN {{{====================================================================
 cat(".") 
 
-# define screening functions ---------------------------------------------------{{{
+    # define screening functions {{{--------------------------------------------
 
 add_flag <- function(data, f) {
     mutate(data,
@@ -189,14 +188,14 @@ flag_data <- function(data, ...) {
 
 # TODO: flag unexpected fractions?
 
-# duplicate WQID ---------------------------------------------------------------{{{
+    # duplicate WQID {{{--------------------------------------------------------
 
 data <- data |> 
     mutate(is_dup = duplicated(WQID) | duplicated(WQID, fromLast = TRUE)) |>
     flag_data(is_dup ~ "duplicate WQID") |>
     select(all_of(.schema$all))# }}}
 
-# resqualcode checks -----------------------------------------------------------{{{
+    # resqualcode checks {{{----------------------------------------------------
 
 # codes reference
 # https://ceden.waterboards.ca.gov/CEDEN_Checker/DisplayLookUp.aspx?List=ResQualLookUp
@@ -224,7 +223,7 @@ data <- data |>
     flag_data(code_is_lt & result_is_not_lt ~ "Result > RL or Result < 0") |>
     select(all_of(.schema$all))# }}}
 
-# rl checks --------------------------------------------------------------------{{{
+    # rl checks {{{-------------------------------------------------------------
 
 # flag missing RL for nd'ish rows
 ndish_codes <- c("ND", "DNQ", "<")
@@ -244,7 +243,7 @@ data <- data |>
                 "RL less than MDL") |>
     select(all_of(.schema$all))# }}}
 
-# missing result ---------------------------------------------------------------{{{
+    # missing result {{{--------------------------------------------------------
 
 ndish_codes <- c("ND", "DNQ", "<")
 data <- data |> 
@@ -253,7 +252,7 @@ data <- data |>
     flag_data(result_is_missing & !code_is_ndish ~ "missing Result") |>
     select(all_of(.schema$all))# }}}
 
-# remaining checks -------------------------------------------------------------{{{
+    # remaining checks {{{------------------------------------------------------
 
 expected_codes <- c("ND", "DNQ", "=", ">", ">=", "<")
 expected_matricies <- c("samplewater")
@@ -277,14 +276,14 @@ data <- flag_data(data,
     is.na(WQID) ~ "missing WQID"
 )# }}}
 
-# id clean samples -------------------------------------------------------------{{{
+    # id clean samples {{{------------------------------------------------------
 
 data <- mutate(data, is_clean = is.na(Issue))# }}}}}}
 
-# QUANTIFY ====================================================================={{{
+# QUANTIFY {{{==================================================================
 cat(".") 
 
-# convert units to ug/L --------------------------------------------------------{{{
+    # convert units to ug/L {{{-------------------------------------------------
 
 data <- data |>
     mutate(across(c(Result, MDL, RL), \(x) case_when(
@@ -303,7 +302,7 @@ data <- data |>
                 x)
         }))# }}}
 
-# quantify nondetect-ish results -----------------------------------------------{{{
+    # quantify nondetect-ish results {{{----------------------------------------
 
 # NOTE: needs additional scrutiny if assessing summing pollutants. converting
 # nd's to 0.5MDL could lead to inflated results due to summing
@@ -314,7 +313,7 @@ data <- data |>
            Result = if_else(is_ndish, ndish_result, Result)) |>
     select(all_of(.schema$all))# }}}
 
-# id quantifiable samples ------------------------------------------------------{{{
+    # id quantifiable samples {{{-----------------------------------------------
 
 data <- data |> 
     mutate(is_quant_code = ResQualCode %in% c("=", ">", ">="),
@@ -322,10 +321,10 @@ data <- data |>
            is_quant = is_quant_code | rl_lte_obj) |>
     select(all_of(.schema$all))# }}}}}}
 
-# AVERAGE ======================================================================{{{
+# AVERAGE {{{===================================================================
 cat(".") 
 
-# standardize non/ionic fractions ----------------------------------------------{{{
+    # standardize non/ionic fractions {{{---------------------------------------
 
 nonionic <- c(
     "Alkalinity as CaCO3",
@@ -356,7 +355,7 @@ data <- data |>
             .default = FractionName
     ))# }}}
 
-# make loe id ------------------------------------------------------------------{{{
+    # make loe id {{{-----------------------------------------------------------
 
 # grouping factors that uniqely identify loes
 # NOTE: should include ir year
@@ -378,7 +377,7 @@ data <- data |>
         digest(list(...), algo = "xxhash32")
     }))# }}}
 
-# make sample id ---------------------------------------------------------------{{{
+    # make sample id {{{--------------------------------------------------------
 
 # # 365-day, event-triggered, forward- moving sample id
 # data <- data |>
@@ -404,7 +403,7 @@ data <- data |>
 # calendar year sample id
 data <- mutate(data, sample_id = as.character(year(SampleDate)))# }}}
 
-# average results --------------------------------------------------------------{{{
+    # average results {{{-------------------------------------------------------
 
 data <- data |>
     # average replicates to avoid overweighting replicate results
@@ -417,10 +416,10 @@ data <- data |>
            .by = c(loe_id, sample_id)) |>
     select(all_of(.schema$all))# }}}}}}
 
-# QUERY ========================================================================{{{
+# QUERY {{{=====================================================================
 cat(".") 
 
-# samples and exceedances ------------------------------------------------------{{{
+    # samples and exceedances {{{-----------------------------------------------
 
 data <- data  |>
     mutate(sample_is_usable = any(is_clean & is_quant),
@@ -437,7 +436,7 @@ data <- data  |>
 # evaluates to numeric(0) if is_usable is all false. n_distinct(numeric(0)) in
 # turn evaluates to 0. }}}
 
-# data used --------------------------------------------------------------------{{{
+    # data used {{{-------------------------------------------------------------
 
 no_nonquant_lang <- 
     "Water Board staff assessed {ParentProjectName} data for {Waterbody}
@@ -488,7 +487,7 @@ data <- data |>
            .by = loe_id) |>
     select(all_of(.schema$all))# }}}
 
-# assessor comment -------------------------------------------------------------{{{
+    # assessor comment {{{------------------------------------------------------
 
 version_lang <- 
     system("git rev-parse --short HEAD", intern = TRUE) |>
@@ -518,7 +517,7 @@ data <- data |>
                         glue(version_lang))),
            .by = loe_id)# }}}
 
-# temporal rep -----------------------------------------------------------------{{{
+    # temporal rep {{{----------------------------------------------------------
 
 temporal_lang <- 
     "The samples were collected between the dates of {min_date} and
@@ -531,7 +530,7 @@ data <- data |>
            .by = loe_id) |>
     select(all_of(.schema$all))# }}}
 
-# spatial rep ------------------------------------------------------------------{{{
+    # spatial rep {{{-----------------------------------------------------------
 
 spatial_lang <- 
     "The samples were collected at 1 monitoring site: {StationCode}
@@ -539,11 +538,11 @@ spatial_lang <-
 
 data <- mutate(data, SPATIAL_REP = str_squish(glue(spatial_lang)))# }}}
 
-# xwalk pollutant names --------------------------------------------------------{{{
+    # xwalk pollutant names {{{-------------------------------------------------
 
 data <- mutate(data, AnalyteName = coalesce(PollutantName_in_CalWQA, AnalyteName))# }}}
 
-# remaining fields -------------------------------------------------------------{{{
+    # remaining fields {{{------------------------------------------------------
 
 data <- mutate(data,
     ASSESSMENT_STATUS = "LOE In Progress",
@@ -555,12 +554,12 @@ data <- mutate(data,
     SUB_GROUP = "Pollutant-Water"
 )# }}}}}}
 
-# WRITE ========================================================================{{{
+# WRITE {{{=====================================================================
 cat(".") 
 
 # script should write annotated data even if there are no loes
 
-# loes -------------------------------------------------------------------------{{{
+    # loes {{{------------------------------------------------------------------
 
 data_to_loe_names <- .schema |>
     filter(loes %nin% c(all, NA))  |>
@@ -584,7 +583,7 @@ loe_path <- glue(
 )
 write_xlsx(loes, loe_path)# }}}
 
-# annotated data ---------------------------------------------------------------{{{
+    # annotated data {{{--------------------------------------------------------
 
 annotated_path <- glue(
     "./annotated-data/",
